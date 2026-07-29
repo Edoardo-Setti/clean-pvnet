@@ -63,6 +63,14 @@ cfg.train.rotate_max = 30
 cfg.train.overlap_ratio = 0.8
 cfg.train.resize_ratio_min = 0.8
 cfg.train.resize_ratio_max = 1.2
+cfg.train.blur_prob = 0.5
+cfg.train.blur_kernel_sizes = [3, 5, 7, 9]
+cfg.train.noise_prob = 0.0
+cfg.train.noise_std_max = 0.03
+cfg.train.color_jitter_brightness = 0.1
+cfg.train.color_jitter_contrast = 0.1
+cfg.train.color_jitter_saturation = 0.05
+cfg.train.color_jitter_hue = 0.05
 
 cfg.train.batch_sampler = ''
 

@@ -68,13 +68,28 @@ class ColorJitter(object):
 
 class RandomBlur(object):
 
-    def __init__(self, prob=0.5):
+    def __init__(self, prob=0.5, kernel_sizes=None):
         self.prob = prob
+        self.kernel_sizes = kernel_sizes or [3, 5, 7, 9]
 
     def __call__(self, image, kpts, mask):
         if random.random() < self.prob:
-            sigma = np.random.choice([3, 5, 7, 9])
+            sigma = int(np.random.choice(self.kernel_sizes))
             image = cv2.GaussianBlur(image, (sigma, sigma), 0)
+        return image, kpts, mask
+
+
+class RandomGaussianNoise(object):
+
+    def __init__(self, prob=0.0, std_max=0.03):
+        self.prob = prob
+        self.std_max = std_max
+
+    def __call__(self, image, kpts, mask):
+        if random.random() < self.prob:
+            std = np.random.uniform(0.0, self.std_max) * 255.0
+            noise = np.random.normal(0.0, std, image.shape)
+            image = np.clip(image.astype(np.float32) + noise, 0, 255).astype(np.uint8)
         return image, kpts, mask
 
 
@@ -82,8 +97,14 @@ def make_transforms(cfg, is_train):
     if is_train is True:
         transform = Compose(
             [
-                RandomBlur(0.5),
-                ColorJitter(0.1, 0.1, 0.05, 0.05),
+                RandomBlur(cfg.train.blur_prob, list(cfg.train.blur_kernel_sizes)),
+                RandomGaussianNoise(cfg.train.noise_prob, cfg.train.noise_std_max),
+                ColorJitter(
+                    cfg.train.color_jitter_brightness,
+                    cfg.train.color_jitter_contrast,
+                    cfg.train.color_jitter_saturation,
+                    cfg.train.color_jitter_hue,
+                ),
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
