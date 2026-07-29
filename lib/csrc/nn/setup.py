@@ -1,7 +1,18 @@
 import os
 
-cuda_include=os.path.join(os.environ.get('CUDA_HOME'), 'include')
-os.system('nvcc src/nearest_neighborhood.cu -c -o src/nearest_neighborhood.cu.o -x cu -Xcompiler -fPIC -O2 -arch=sm_52 -I {}'.format(cuda_include))
+cuda_home = os.environ.get('CUDA_HOME', '/usr')
+cuda_include = os.path.join(cuda_home, 'include')
+cuda_lib = os.path.join(cuda_home, 'lib64', 'libcudart.so')
+if not os.path.exists(cuda_lib):
+    cuda_lib = '/usr/lib/x86_64-linux-gnu/libcudart.so'
+ccbin = os.environ.get('CC', 'gcc')
+cuda_arch = os.environ.get('PVNET_CUDA_ARCH', 'sm_86')
+os.system(
+    'nvcc src/nearest_neighborhood.cu -c -o src/nearest_neighborhood.cu.o '
+    '-x cu -Xcompiler -fPIC -O2 -arch={} -ccbin {} -I {}'.format(
+        cuda_arch, ccbin, cuda_include
+    )
+)
 
 from cffi import FFI
 ffibuilder = FFI()
@@ -16,7 +27,7 @@ ffibuilder.set_source(
     #include "src/ext.h"
     """,
     extra_objects=['src/nearest_neighborhood.cu.o',
-                   os.path.join(os.environ.get('CUDA_HOME'),'lib64/libcudart.so')],
+                   cuda_lib],
     libraries=['stdc++']
 )
 

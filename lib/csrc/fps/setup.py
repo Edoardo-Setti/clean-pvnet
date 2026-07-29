@@ -1,6 +1,7 @@
 import os
 
-os.system('gcc -shared src/farthest_point_sampling.cpp -c -o src/farthest_point_sampling.cpp.o -fopenmp -fPIC -O2 -std=c++11')
+cc = os.environ.get('CC', 'gcc')
+os.system('{} -shared src/farthest_point_sampling.cpp -c -o src/farthest_point_sampling.cpp.o -fopenmp -fPIC -O2 -std=c++11'.format(cc))
 
 from cffi import FFI
 ffibuilder = FFI()
