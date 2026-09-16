@@ -2,6 +2,7 @@ import torch.utils.data as data
 from pycocotools.coco import COCO
 import numpy as np
 import os
+import cv2
 from PIL import Image
 from lib.utils.pvnet import pvnet_data_utils, pvnet_linemod_utils, visualize_utils
 from lib.utils.linemod import linemod_config
@@ -63,6 +64,9 @@ class Dataset(data.Dataset):
         # add one column to kpt_2d for convenience to calculate
         hcoords = np.concatenate((kpt_2d, np.ones((9, 1))), axis=-1)
         img = np.asarray(img).astype(np.uint8)
+        original_img = img.copy()
+        original_mask = mask.copy()
+        original_hcoords = hcoords.copy()
         foreground = np.sum(mask)
         # randomly mask out to add occlusion
         if foreground > 0:
@@ -79,6 +83,20 @@ class Dataset(data.Dataset):
                 img, mask = crop_or_padding_to_fixed_size(img, mask, height, width)
         else:
             img, mask = crop_or_padding_to_fixed_size(img, mask, height, width)
+
+        # A crop can occasionally exclude a strongly truncated instance.  An
+        # empty mask would make PVNet's vote loss divide by zero, so fall back
+        # to a resize of the valid, unaugmented sample in that rare case.
+        if not np.any(mask):
+            original_height, original_width = original_mask.shape[:2]
+            img = cv2.resize(original_img, (width, height), interpolation=cv2.INTER_LINEAR)
+            mask = cv2.resize(
+                original_mask, (width, height), interpolation=cv2.INTER_NEAREST
+            )
+            hcoords = original_hcoords
+            hcoords[:, 0] *= width / original_width
+            hcoords[:, 1] *= height / original_height
+
         kpt_2d = hcoords[:, :2]
 
         return img, kpt_2d, mask

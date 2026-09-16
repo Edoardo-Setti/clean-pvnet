@@ -1,7 +1,7 @@
 from yacs.config import CfgNode as CN
 import argparse
 import os
-import open3d
+# import open3d
 
 cfg = CN()
 

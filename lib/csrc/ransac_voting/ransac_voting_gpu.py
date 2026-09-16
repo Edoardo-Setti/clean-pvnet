@@ -95,18 +95,15 @@ def ransac_voting_layer(mask, vertex, round_hyp_num, inlier_thresh=0.999, confid
     return batch_win_pts
 
 def b_inv(b_mat):
-    '''
-    code from
-    https://stackoverflow.com/questions/46595157/how-to-apply-the-torch-inverse-function-of-pytorch-to-every-sample-in-the-batc
-    :param b_mat:
-    :return:
-    '''
-    eye = b_mat.new_ones(b_mat.size(-1)).diag().expand_as(b_mat)
-    try:
-        b_inv, _ = torch.solve(eye, b_mat)
-    except:
-        b_inv = eye
-    return b_inv
+    """Compute a stable batched inverse for the voting normal equations.
+
+    ``torch.solve`` used by the original PVNet implementation is no longer
+    available in the PyTorch version used by this workspace.  Its former broad
+    exception handler silently returned the identity matrix, which skipped the
+    solve altogether and yielded keypoints tens of thousands of pixels away.
+    The pseudoinverse also handles near-singular RANSAC hypotheses safely.
+    """
+    return torch.linalg.pinv(b_mat)
 
 
 def ransac_voting_layer_v3(mask, vertex, round_hyp_num, inlier_thresh=0.999, confidence=0.99, max_iter=20,
