@@ -7,15 +7,20 @@ import torch.distributed as dist
 
 
 class ImageSizeBatchSampler(Sampler):
-    def __init__(self, sampler, batch_size, drop_last, min_size=600, max_height=800, max_width=800, size_int=8):
+    def __init__(self, sampler, batch_size, drop_last, min_height=600,
+                 max_height=800, min_width=600, max_width=800, size_int=8):
         self.sampler = sampler
         self.batch_size = batch_size
         self.drop_last = drop_last
-        self.hmin = min_size
+        self.hmin = min_height
         self.hmax = max_height
-        self.wmin = min_size
+        self.wmin = min_width
         self.wmax = max_width
         self.size_int = size_int
+        if self.hmin > self.hmax or self.wmin > self.wmax:
+            raise ValueError('ImageSizeBatchSampler minimum size exceeds maximum size')
+        if any(value % self.size_int for value in (self.hmin, self.hmax, self.wmin, self.wmax)):
+            raise ValueError('ImageSizeBatchSampler dimensions must be divisible by size_int')
         self.hint = (self.hmax-self.hmin)//self.size_int+1
         self.wint = (self.wmax-self.wmin)//self.size_int+1
 

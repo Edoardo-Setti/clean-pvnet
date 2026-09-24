@@ -48,7 +48,15 @@ def make_batch_data_sampler(cfg, sampler, batch_size, drop_last, max_iter, is_tr
 
     strategy = cfg.train.batch_sampler if is_train else cfg.test.batch_sampler
     if strategy == 'image_size':
-        batch_sampler = samplers.ImageSizeBatchSampler(sampler, batch_size, drop_last, 256, 480, 640)
+        batch_sampler = samplers.ImageSizeBatchSampler(
+            sampler,
+            batch_size,
+            drop_last,
+            cfg.train.image_size_min_height,
+            cfg.train.image_size_max_height,
+            cfg.train.image_size_min_width,
+            cfg.train.image_size_max_width,
+        )
 
     return batch_sampler
 

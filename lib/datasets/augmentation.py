@@ -295,6 +295,89 @@ def crop_resize_instance_v1(img, mask, hcoords, imheight, imwidth,
     return img, mask, hcoords
 
 
+def crop_resize_instance_full(img, mask, hcoords, imheight, imwidth,
+                              margin_min=0.1, margin_max=0.25):
+    """Fit the complete instance and all keypoints inside a fixed canvas.
+
+    The legacy PVNet crop intentionally permits heavy truncation.  That is useful
+    as an occasional occlusion augmentation, but using it for every sample makes
+    long-range voting unstable for large planar objects.  This variant builds a
+    crop around the union of the foreground mask and keypoints, adds a random
+    margin, then letterboxes it without changing the aspect ratio.
+    """
+    if margin_min < 0 or margin_max < margin_min:
+        raise ValueError('Expected 0 <= margin_min <= margin_max')
+
+    hs, ws = np.nonzero(mask)
+    if len(hs) == 0:
+        raise ValueError('Cannot crop a full instance from an empty mask')
+
+    finite = np.all(np.isfinite(hcoords[:, :2]), axis=1)
+    xs = np.concatenate([ws.astype(np.float32), hcoords[finite, 0]])
+    ys = np.concatenate([hs.astype(np.float32), hcoords[finite, 1]])
+    xmin, xmax = float(np.min(xs)), float(np.max(xs))
+    ymin, ymax = float(np.min(ys)), float(np.max(ys))
+    bbox_width = max(xmax - xmin + 1.0, 1.0)
+    bbox_height = max(ymax - ymin + 1.0, 1.0)
+    margin = np.random.uniform(margin_min, margin_max)
+
+    crop_xmin = int(np.floor(xmin - margin * bbox_width))
+    crop_xmax = int(np.ceil(xmax + margin * bbox_width)) + 1
+    crop_ymin = int(np.floor(ymin - margin * bbox_height))
+    crop_ymax = int(np.ceil(ymax + margin * bbox_height)) + 1
+    crop_width = max(crop_xmax - crop_xmin, 1)
+    crop_height = max(crop_ymax - crop_ymin, 1)
+
+    fill = np.mean(img.reshape(-1, img.shape[2]), axis=0)
+    crop_img = np.empty((crop_height, crop_width, img.shape[2]), dtype=img.dtype)
+    crop_img[...] = np.asarray(fill, dtype=img.dtype)
+    crop_mask = np.zeros((crop_height, crop_width), dtype=mask.dtype)
+
+    src_xmin = max(crop_xmin, 0)
+    src_xmax = min(crop_xmax, img.shape[1])
+    src_ymin = max(crop_ymin, 0)
+    src_ymax = min(crop_ymax, img.shape[0])
+    if src_xmax > src_xmin and src_ymax > src_ymin:
+        dst_xmin = src_xmin - crop_xmin
+        dst_ymin = src_ymin - crop_ymin
+        dst_xmax = dst_xmin + src_xmax - src_xmin
+        dst_ymax = dst_ymin + src_ymax - src_ymin
+        crop_img[dst_ymin:dst_ymax, dst_xmin:dst_xmax] = img[
+            src_ymin:src_ymax, src_xmin:src_xmax
+        ]
+        crop_mask[dst_ymin:dst_ymax, dst_xmin:dst_xmax] = mask[
+            src_ymin:src_ymax, src_xmin:src_xmax
+        ]
+
+    scale = min(imwidth / crop_width, imheight / crop_height)
+    resized_width = max(1, min(imwidth, int(round(crop_width * scale))))
+    resized_height = max(1, min(imheight, int(round(crop_height * scale))))
+    scale_x = resized_width / crop_width
+    scale_y = resized_height / crop_height
+    resized_img = cv2.resize(
+        crop_img, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR
+    )
+    resized_mask = cv2.resize(
+        crop_mask, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST
+    )
+
+    max_x_offset = imwidth - resized_width
+    max_y_offset = imheight - resized_height
+    x_offset = np.random.randint(0, max_x_offset + 1) if max_x_offset else 0
+    y_offset = np.random.randint(0, max_y_offset + 1) if max_y_offset else 0
+
+    out_img = np.empty((imheight, imwidth, img.shape[2]), dtype=img.dtype)
+    out_img[...] = np.asarray(fill, dtype=img.dtype)
+    out_mask = np.zeros((imheight, imwidth), dtype=mask.dtype)
+    out_img[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized_img
+    out_mask[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized_mask
+
+    hcoords = hcoords.copy()
+    hcoords[:, 0] = (hcoords[:, 0] - crop_xmin) * scale_x + x_offset
+    hcoords[:, 1] = (hcoords[:, 1] - crop_ymin) * scale_y + y_offset
+    return out_img, out_mask, hcoords
+
+
 def crop_resize_instance_v2(img, mask, hcoords, imheight, imwidth,
                             overlap_ratio=0.5, hmin=30, hmax=135, wmin=30, wmax=130):
     '''

@@ -6,7 +6,12 @@ import cv2
 from PIL import Image
 from lib.utils.pvnet import pvnet_data_utils, pvnet_linemod_utils, visualize_utils
 from lib.utils.linemod import linemod_config
-from lib.datasets.augmentation import crop_or_padding_to_fixed_size, rotate_instance, crop_resize_instance_v1
+from lib.datasets.augmentation import (
+    crop_or_padding_to_fixed_size,
+    crop_resize_instance_full,
+    crop_resize_instance_v1,
+    rotate_instance,
+)
 import random
 import torch
 from lib.config import cfg
@@ -24,6 +29,10 @@ class Dataset(data.Dataset):
         self.img_ids = np.array(sorted(self.coco.getImgIds()))
         self._transforms = transforms
         self.cfg = cfg
+        if self.cfg.train.geometry_mode not in ('legacy_crop', 'full_object'):
+            raise ValueError(
+                'Unsupported train.geometry_mode: {}'.format(self.cfg.train.geometry_mode)
+            )
 
     def read_data(self, img_id):
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
@@ -74,7 +83,20 @@ class Dataset(data.Dataset):
                 img, mask, hcoords = rotate_instance(
                     img, mask, hcoords, self.cfg.train.rotate_min, self.cfg.train.rotate_max
                 )
-            if random.random() < self.cfg.train.cropresize_rate:
+            if (
+                self.cfg.train.geometry_mode == 'full_object'
+                and random.random() < self.cfg.train.full_object_rate
+            ):
+                img, mask, hcoords = crop_resize_instance_full(
+                    img,
+                    mask,
+                    hcoords,
+                    height,
+                    width,
+                    self.cfg.train.full_object_margin_min,
+                    self.cfg.train.full_object_margin_max,
+                )
+            elif random.random() < self.cfg.train.cropresize_rate:
                 img, mask, hcoords = crop_resize_instance_v1(img, mask, hcoords, height, width,
                                                              self.cfg.train.overlap_ratio,
                                                              self.cfg.train.resize_ratio_min,
